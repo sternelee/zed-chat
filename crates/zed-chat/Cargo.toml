@@ -5,6 +5,7 @@ edition.workspace = true
 publish.workspace = true
 license = "GPL-3.0-or-later"
 description = "Standalone agent chat application built with GPUI"
+authors = ["Zed Team <hi@zed.dev>"]
 
 [lints]
 workspace = true
@@ -14,14 +15,115 @@ name = "zed-chat"
 path = "src/main.rs"
 
 [dependencies]
+# Agent and AI components
+acp_tools.workspace = true
+agent_settings.workspace = true
+agent_ui.workspace = true
+ai_onboarding.workspace = true
+assistant_slash_command.workspace = true
+assistant_slash_commands.workspace = true
+
+# Core infrastructure
 anyhow.workspace = true
 assets.workspace = true
+clap.workspace = true
+cli.workspace = true
+client.workspace = true
+collections.workspace = true
+crashes.workspace = true
+db.workspace = true
+
+# Filesystem and paths
+fs.workspace = true
+paths.workspace = true
+
+# GPUI and UI
 gpui = { workspace = true, features = ["wayland", "x11", "font-kit"] }
-log.workspace = true
-reqwest_client.workspace = true
-settings.workspace = true
-simplelog.workspace = true
+gpui_tokio.workspace = true
 theme.workspace = true
+theme_extension.workspace = true
+theme_selector.workspace = true
+ui.workspace = true
+ui_input.workspace = true
+menu.workspace = true
+picker.workspace = true
+
+# Settings and configuration
+settings.workspace = true
+settings_json.workspace = true
+settings_ui.workspace = true
+keymap_editor.workspace = true
+
+# Language and extensions
+extension.workspace = true
+extension_host.workspace = true
+language.workspace = true
+language_extension.workspace = true
+language_model.workspace = true
+language_models.workspace = true
+languages = { workspace = true, features = ["load-grammars"] }
+node_runtime.workspace = true
+
+# Project and workspace
+project.workspace = true
+workspace.workspace = true
+recent_projects.workspace = true
+
+# Networking
+http_client.workspace = true
+reqwest_client.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+
+# Utilities
+feature_flags.workspace = true
+futures.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+release_channel.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+session.workspace = true
+smol.workspace = true
+telemetry.workspace = true
+telemetry_events.workspace = true
+time.workspace = true
+util.workspace = true
+uuid.workspace = true
+watch.workspace = true
+
+# Git
+git.workspace = true
+git_hosting_providers.workspace = true
+
+# Prompts and context
+prompt_store.workspace = true
+web_search.workspace = true
+web_search_providers.workspace = true
+
+# Additional components we want to keep
+command_palette.workspace = true
+notifications.workspace = true
+title_bar.workspace = true
+zed_actions.workspace = true
+zed_env_vars.workspace = true
+zlog.workspace = true
+zlog_settings.workspace = true
+
+# System
+backtrace = "0.3"
+env_logger.workspace = true
+shellexpand.workspace = true
+mimalloc = { version = "0.1", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows.workspace = true
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+ashpd.workspace = true
+
+[target.'cfg(target_os = "linux")']
+nix = { workspace = true, features = ["pthread", "signal"] }
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
