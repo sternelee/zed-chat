@@ -8,6 +8,15 @@ use log::LevelFilter;
 use simplelog::SimpleLogger;
 use std::sync::Arc;
 
+const WELCOME_MESSAGE: &str = "Zed Chat - Standalone GPUI Application\n\n\
+    This is a standalone GPUI application extracted from Zed's agent chat functionality.\n\n\
+    Features:\n\
+    - Independent GPUI application\n\
+    - Agent chat UI components\n\
+    - Separate from main Zed editor\n\n\
+    The full agent UI integration requires additional initialization that would be \
+    completed in a production version.";
+
 fn main() {
     SimpleLogger::init(LevelFilter::Info, Default::default())
         .expect("could not initialize logger");
@@ -75,7 +84,7 @@ struct ChatWindow {
 impl ChatWindow {
     fn new(_cx: &mut gpui::Context<Self>) -> Self {
         Self {
-            message: "Zed Chat - Standalone GPUI Application\n\nThis is a standalone GPUI application extracted from Zed's agent chat functionality.\n\nFeatures:\n- Independent GPUI application\n- Agent chat UI components\n- Separate from main Zed editor\n\nThe full agent UI integration requires additional initialization that would be completed in a production version.".into(),
+            message: WELCOME_MESSAGE.into(),
         }
     }
 }
@@ -119,5 +128,7 @@ fn load_embedded_fonts(cx: &App) -> Result<()> {
             }
         }
     }
-    cx.text_system().add_fonts(embedded_fonts)
+    cx.text_system()
+        .add_fonts(embedded_fonts)
+        .map_err(|e| anyhow::anyhow!("Failed to load fonts: {}", e))
 }
