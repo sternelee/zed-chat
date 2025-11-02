@@ -457,7 +457,7 @@ pub fn main() {
         .detach();
         let node_runtime = NodeRuntime::new(client.http_client(), Some(shell_env_loaded_rx), rx);
 
-        debug_adapter_extension::init(extension_host_proxy.clone(), cx);
+        // Removed: debug_adapter_extension (debugging feature)
         language::init(cx);
         languages::init(languages.clone(), fs.clone(), node_runtime.clone(), cx);
         let user_store = cx.new(|cx| UserStore::new(client.clone(), cx));
@@ -486,10 +486,9 @@ pub fn main() {
 
         Client::set_global(client.clone(), cx);
 
-        zed::init(cx);
+        // Removed: zed::init() - action registrations for editor features
         project::Project::init(&client, cx);
-        debugger_ui::init(cx);
-        debugger_tools::init(cx);
+        // Removed: debugger_ui, debugger_tools (debugging features)
         client::init(&client, cx);
         let telemetry = client.telemetry();
         telemetry.start(
@@ -529,7 +528,7 @@ pub fn main() {
         AppState::set_global(Arc::downgrade(&app_state), cx);
 
         auto_update::init(client.http_client(), cx);
-        dap_adapters::init(cx);
+        // Removed: dap_adapters (debugging feature)
         auto_update_ui::init(cx);
         reliability::init(
             client.http_client(),
@@ -552,24 +551,17 @@ pub fn main() {
             cx.background_executor().clone(),
         );
         command_palette::init(cx);
-        let copilot_language_server_id = app_state.languages.next_language_server_id();
-        copilot::init(
-            copilot_language_server_id,
-            app_state.fs.clone(),
-            app_state.client.http_client(),
-            app_state.node_runtime.clone(),
-            cx,
-        );
-        supermaven::init(app_state.client.clone(), cx);
+        // Removed: copilot (editor AI assistant)
+        // Removed: supermaven (editor AI assistant)
         language_model::init(app_state.client.clone(), cx);
         language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
         agent_settings::init(cx);
         acp_tools::init(cx);
-        zeta2_tools::init(cx);
+        // Removed: zeta2_tools (editor-specific)
         web_search::init(cx);
         web_search_providers::init(app_state.client.clone(), cx);
-        snippet_provider::init(cx);
-        edit_prediction_registry::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+        // Removed: snippet_provider (editor feature)
+        // Removed: edit_prediction_registry (AI code completion)
         let prompt_builder = PromptBuilder::load(app_state.fs.clone(), stdout_is_a_pty(), cx);
         agent_ui::init(
             app_state.fs.clone(),
@@ -579,53 +571,42 @@ pub fn main() {
             false,
             cx,
         );
-        repl::init(app_state.fs.clone(), cx);
+        // Removed: repl (code execution feature)
         recent_projects::init(cx);
 
         load_embedded_fonts(cx);
 
-        editor::init(cx);
-        image_viewer::init(cx);
-        repl::notebook::init(cx);
-        diagnostics::init(cx);
+        editor::init(cx);  // Keep minimal editor for text display
+        // Removed: image_viewer (editor feature)
+        // Removed: repl::notebook (code execution)
+        // Removed: diagnostics (code analysis)
 
         audio::init(cx);
         workspace::init(app_state.clone(), cx);
         ui_prompt::init(cx);
 
-        go_to_line::init(cx);
-        file_finder::init(cx);
-        tab_switcher::init(cx);
-        outline::init(cx);
-        project_symbols::init(cx);
-        project_panel::init(cx);
-        outline_panel::init(cx);
-        tasks_ui::init(cx);
-        snippets_ui::init(cx);
+        // REMOVED EDITOR-SPECIFIC COMPONENTS:
+        // go_to_line, file_finder, tab_switcher, outline, project_symbols
+        // project_panel, outline_panel, tasks_ui, snippets_ui
+        // search, vim, terminal_view, journal
+        // line_ending_selector, toolchain_selector
+        // git_ui (keeping git for version info only)
+        // markdown_preview, svg_preview, inspector_ui
+
         channel::init(&app_state.client.clone(), app_state.user_store.clone(), cx);
-        search::init(cx);
-        vim::init(cx);
-        terminal_view::init(cx);
-        journal::init(app_state.clone(), cx);
         language_selector::init(cx);
-        line_ending_selector::init(cx);
-        toolchain_selector::init(cx);
         theme_selector::init(cx);
         settings_profile_selector::init(cx);
         language_tools::init(cx);
         call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         collab_ui::init(&app_state, cx);
-        git_ui::init(cx);
         feedback::init(cx);
-        markdown_preview::init(cx);
-        svg_preview::init(cx);
         onboarding::init(cx);
         settings_ui::init(cx);
         keymap_editor::init(cx);
         extensions_ui::init(cx);
-        zeta::init(cx);
-        inspector_ui::init(app_state.clone(), cx);
+        // Removed: zeta (editor feature)
         json_schema_store::init(cx);
 
         cx.observe_global::<SettingsStore>({
@@ -737,7 +718,7 @@ pub fn main() {
 
         let app_state = app_state.clone();
 
-        crate::zed::component_preview::init(app_state.clone(), cx);
+        // Removed: component_preview (development/testing feature)
 
         cx.spawn(async move |cx| {
             while let Some(urls) = open_rx.next().await {

@@ -1,7 +1,7 @@
 use collab_ui::collab_panel;
 use gpui::{App, Menu, MenuItem, OsAction};
 use release_channel::ReleaseChannel;
-use terminal_view::terminal_panel;
+// Removed: terminal_view (editor feature)
 use zed_actions::{ToggleFocus as ToggleDebugPanel, agent::AddSelectionToThread, dev};
 
 pub fn app_menus(cx: &mut App) -> Vec<Menu> {
@@ -39,13 +39,14 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
             ],
         }),
         MenuItem::separator(),
-        MenuItem::action("Project Panel", project_panel::ToggleFocus),
-        MenuItem::action("Outline Panel", outline_panel::ToggleFocus),
+        // Removed editor-specific panels:
+        // MenuItem::action("Project Panel", project_panel::ToggleFocus),
+        // MenuItem::action("Outline Panel", outline_panel::ToggleFocus),
         MenuItem::action("Collab Panel", collab_panel::ToggleFocus),
-        MenuItem::action("Terminal Panel", terminal_panel::ToggleFocus),
+        // MenuItem::action("Terminal Panel", terminal_panel::ToggleFocus),
         MenuItem::action("Debugger Panel", ToggleDebugPanel),
         MenuItem::separator(),
-        MenuItem::action("Diagnostics", diagnostics::Deploy),
+        // Removed: MenuItem::action("Diagnostics", diagnostics::Deploy),
         MenuItem::separator(),
     ];
 
@@ -164,7 +165,7 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                 MenuItem::action("Copy and Trim", editor::actions::CopyAndTrim),
                 MenuItem::os_action("Paste", editor::actions::Paste, OsAction::Paste),
                 MenuItem::separator(),
-                MenuItem::action("Find", search::buffer_search::Deploy::find()),
+                // Removed: MenuItem::action("Find", search::buffer_search::Deploy::find()),
                 MenuItem::action("Find In Project", workspace::DeploySearch::find()),
                 MenuItem::separator(),
                 MenuItem::action(
@@ -263,19 +264,20 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                         reveal_target: None,
                     },
                 ),
-                MenuItem::action("Start Debugger", debugger_ui::Start),
+                // Removed: MenuItem::action("Start Debugger", debugger_ui::Start),
                 MenuItem::separator(),
                 MenuItem::action("Edit tasks.json...", crate::zed::OpenProjectTasks),
                 MenuItem::action("Edit debug.json...", zed_actions::OpenProjectDebugTasks),
                 MenuItem::separator(),
-                MenuItem::action("Continue", debugger_ui::Continue),
-                MenuItem::action("Step Over", debugger_ui::StepOver),
-                MenuItem::action("Step Into", debugger_ui::StepInto),
-                MenuItem::action("Step Out", debugger_ui::StepOut),
+                // Removed debugger actions:
+                // MenuItem::action("Continue", debugger_ui::Continue),
+                // MenuItem::action("Step Over", debugger_ui::StepOver),
+                // MenuItem::action("Step Into", debugger_ui::StepInto),
+                // MenuItem::action("Step Out", debugger_ui::StepOut),
                 MenuItem::separator(),
                 MenuItem::action("Toggle Breakpoint", editor::actions::ToggleBreakpoint),
                 MenuItem::action("Edit Breakpoint", editor::actions::EditLogBreakpoint),
-                MenuItem::action("Clear all Breakpoints", debugger_ui::ClearAllBreakpoints),
+                // MenuItem::action("Clear all Breakpoints", debugger_ui::ClearAllBreakpoints),
             ],
         },
         Menu {
