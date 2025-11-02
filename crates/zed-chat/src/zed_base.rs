@@ -1,6 +1,3 @@
-mod reliability;
-mod zed;
-
 use agent_ui::AgentPanel;
 use anyhow::{Context as _, Error, Result};
 use clap::{Parser, command};

@@ -26,12 +26,18 @@ assistant_slash_commands.workspace = true
 # Core infrastructure
 anyhow.workspace = true
 assets.workspace = true
+bincode.workspace = true
 clap.workspace = true
 cli.workspace = true
 client.workspace = true
 collections.workspace = true
 crashes.workspace = true
 db.workspace = true
+editor.workspace = true
+onboarding.workspace = true
+remote.workspace = true
+sysinfo.workspace = true
+system_specs.workspace = true
 
 # Filesystem and paths
 fs.workspace = true
@@ -71,6 +77,8 @@ recent_projects.workspace = true
 
 # Networking
 http_client.workspace = true
+proto.workspace = true
+reqwest.workspace = true
 reqwest_client.workspace = true
 url.workspace = true
 urlencoding.workspace = true
@@ -109,6 +117,55 @@ zed_actions.workspace = true
 zed_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
+
+# Additional needed by zed base
+askpass.workspace = true
+audio.workspace = true
+auto_update.workspace = true
+auto_update_ui.workspace = true
+call.workspace = true
+channel.workspace = true
+collab_ui.workspace = true
+copilot.workspace = true
+dap_adapters.workspace = true
+debug_adapter_extension.workspace = true
+debugger_tools.workspace = true
+debugger_ui.workspace = true
+diagnostics.workspace = true
+extensions_ui.workspace = true
+feedback.workspace = true
+file_finder.workspace = true
+git_ui.workspace = true
+go_to_line.workspace = true
+image_viewer.workspace = true
+inspector_ui.workspace = true
+journal.workspace = true
+json_schema_store.workspace = true
+language_selector.workspace = true
+language_tools.workspace = true
+line_ending_selector.workspace = true
+markdown_preview.workspace = true
+nc.workspace = true
+outline.workspace = true
+outline_panel.workspace = true
+project_panel.workspace = true
+project_symbols.workspace = true
+repl.workspace = true
+rope.workspace = true
+search.workspace = true
+settings_profile_selector.workspace = true
+snippet_provider.workspace = true
+snippets_ui.workspace = true
+supermaven.workspace = true
+svg_preview.workspace = true
+tab_switcher.workspace = true
+tasks_ui.workspace = true
+terminal_view.workspace = true
+toolchain_selector.workspace = true
+ui_prompt.workspace = true
+vim.workspace = true
+zeta.workspace = true
+zeta2_tools.workspace = true
 
 # System
 backtrace = "0.3"
