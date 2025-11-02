@@ -60,23 +60,88 @@ The application is structured as follows:
 
 ## Current Status
 
-This is the initial version that provides:
+This version provides a working standalone GPUI application foundation:
 
 1. ✅ Standalone GPUI application structure
 2. ✅ Window creation and basic UI
 3. ✅ Font and theme loading
 4. ✅ HTTP client initialization
-5. ⏳ Full agent chat panel integration (to be completed)
+5. ✅ Settings system integration
+6. 📋 Full AgentPanel integration (architectural challenge - see below)
+
+## AgentPanel Integration Challenge
+
+Integrating the full `AgentPanel` from `agent_ui` requires significant architectural changes:
+
+### Required Components
+
+The AgentPanel requires a full Workspace environment with:
+- **UserStore**: User authentication and state
+- **WorkspaceStore**: Workspace management
+- **Project**: Language server, file system integration
+- **AppSession**: Session management
+- **LanguageRegistry**: Language support
+- **NodeRuntime**: JavaScript/TypeScript tooling
+
+### GPUI Context Challenge
+
+GPUI entities must be created in specific contexts:
+- **App context**: Global initialization (settings, themes, HTTP client)
+- **Window context**: Entity creation (UserStore, Project, Workspace)
+- Entities cannot be created in App context and passed to windows
+
+### Integration Path
+
+To integrate the full AgentPanel:
+
+1. **Restructure initialization**: Move entity creation into window closure
+2. **Add dependencies**: workspace, project, client, session, db (~25 additional crates)
+3. **Implement entity lifecycle**: Proper async initialization and state management
+4. **Setup Workspace**: Create and configure Workspace with all required services
+5. **Load AgentPanel**: Async panel loading and attachment to Workspace
+
+Example initialization structure:
+```rust
+cx.open_window(|window, cx| {
+    // Create entities in window context
+    let user_store = cx.new(|cx| UserStore::new(client, cx));
+    let project = cx.new(|cx| Project::local(...));
+    let workspace = cx.new(|cx| Workspace::new(...));
+    
+    // Load AgentPanel asynchronously
+    cx.spawn(async move |cx| {
+        let panel = AgentPanel::load(workspace, prompt_builder, cx).await?;
+        workspace.update(cx, |ws, cx| ws.add_panel(panel, cx));
+    });
+})
+```
+
+### Current Implementation Decision
+
+The current version provides:
+- ✅ **Working foundation**: Demonstrates standalone GPUI app structure
+- ✅ **Minimal complexity**: Easy to understand and modify
+- ✅ **Build ready**: Compiles and runs successfully
+- 📝 **Integration roadmap**: Clear path for full AgentPanel integration
+
+This approach allows:
+1. **Immediate use**: Application works and can be extended
+2. **Learning tool**: Shows GPUI application basics
+3. **Future expansion**: Foundation ready for full integration when architectural requirements are met
 
 ## Next Steps
 
-To complete the full agent chat functionality, the following items need to be integrated:
+### Short-term (Current Foundation)
+- Customize the ChatWindow UI
+- Add basic chat message display
+- Implement simple user interactions
 
-1. Complete workspace and project initialization
-2. Integrate the full `AgentPanel` from `agent_ui`
-3. Add language model configuration
-4. Implement context management
-5. Add slash command support
+### Long-term (Full Integration)
+1. Implement window-context entity creation
+2. Add all required dependencies
+3. Set up complete Workspace environment
+4. Integrate full AgentPanel with async loading
+5. Add language model and context management
 
 ## Development
 
