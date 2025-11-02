@@ -197,6 +197,7 @@ members = [
     "crates/worktree",
     "crates/x_ai",
     "crates/zed",
+    "crates/zed-chat",
     "crates/zed_actions",
     "crates/zed_env_vars",
     "crates/zeta",
@@ -429,6 +430,7 @@ workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
 x_ai = { path = "crates/x_ai" }
 zed = { path = "crates/zed" }
+zed-chat = { path = "crates/zed-chat" }
 zed_actions = { path = "crates/zed_actions" }
 zed_env_vars = { path = "crates/zed_env_vars" }
 zeta = { path = "crates/zeta" }

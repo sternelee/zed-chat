@@ -21293,6 +21293,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "zed-chat"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "agent_servers",
+ "agent_settings",
+ "agent_ui",
+ "anyhow",
+ "assets",
+ "assistant_slash_command",
+ "assistant_slash_commands",
+ "client",
+ "collections",
+ "command_palette",
+ "db",
+ "dirs 4.0.0",
+ "editor",
+ "extension",
+ "extension_host",
+ "feature_flags",
+ "fs",
+ "futures 0.3.31",
+ "git",
+ "git_hosting_providers",
+ "gpui",
+ "http_client",
+ "language",
+ "language_model",
+ "language_models",
+ "languages",
+ "log",
+ "node_runtime",
+ "parking_lot",
+ "paths",
+ "project",
+ "prompt_store",
+ "release_channel",
+ "reqwest_client",
+ "rope",
+ "session",
+ "settings",
+ "simplelog",
+ "smol",
+ "telemetry",
+ "theme",
+ "ui",
+ "util",
+ "workspace",
+ "zed_actions",
+]
+
+[[package]]
 name = "zed-font-kit"
 version = "0.14.1-zed"
 source = "git+https://github.com/zed-industries/font-kit?rev=110523127440aefb11ce0cf280ae7c5071337ec5#110523127440aefb11ce0cf280ae7c5071337ec5"
