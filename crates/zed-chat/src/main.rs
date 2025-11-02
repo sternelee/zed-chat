@@ -1,17 +1,19 @@
 use anyhow::Result;
 use assets::Assets;
-use gpui::{App, Application, Bounds, Entity, WindowBounds, WindowOptions, px, size, colors::{Colors, GlobalColors}};
+use gpui::{
+    colors::{Colors, GlobalColors}, px, App, Application, Bounds, SharedString, WindowBounds,
+    WindowOptions, div, prelude::*,
+};
 use log::LevelFilter;
 use simplelog::SimpleLogger;
 use std::sync::Arc;
-use workspace::Workspace;
-use agent_ui::AgentPanel;
 
 fn main() {
     SimpleLogger::init(LevelFilter::Info, Default::default())
         .expect("could not initialize logger");
 
-    Application::new().with_assets(Assets).run(|cx| {
+    let app = Application::new().with_assets(Assets);
+    app.run(|cx| {
         if let Err(err) = initialize_app(cx) {
             eprintln!("Failed to initialize application: {}", err);
             std::process::exit(1);
@@ -27,46 +29,37 @@ fn initialize_app(cx: &mut App) -> Result<()> {
     cx.set_global(GlobalColors(Arc::new(Colors::default())));
 
     // Initialize HTTP client
-    let http_client = reqwest_client::ReqwestClient::user_agent("zed_chat")?;
-    cx.set_http_client(Arc::new(http_client));
+    let user_agent = format!(
+        "ZedChat/{} ({}; {})",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
+    let http = reqwest_client::ReqwestClient::user_agent(&user_agent)?;
+    cx.set_http_client(Arc::new(http));
 
-    // Initialize core services
+    // Initialize settings and theme
     settings::init(cx);
     theme::init(theme::LoadThemes::All(Box::new(Assets)), cx);
-    language::init(cx);
-    client::init_settings(cx);
-    language_model::init(cx);
-    editor::init(cx);
-    project::Project::init_settings(cx);
-    workspace::init_settings(cx);
-    
-    // Initialize agent-specific components
-    agent_ui::init(cx);
 
-    // Set up release channel
-    release_channel::init(
-        release_channel::AppVersion::init(env!("CARGO_PKG_VERSION")),
-        cx,
-    );
-
-    // Create the main window
-    let size = size(px(1200.), px(800.));
+    // Create the main window with a simple chat UI placeholder
+    let size = gpui::size(px(1200.), px(800.));
     let bounds = Bounds::centered(None, size, cx);
-    
+
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: Some(gpui::TitlebarOptions {
-                title: Some("Zed Chat".into()),
+                title: Some("Zed Chat - Standalone Agent Chat Application".into()),
                 appears_transparent: false,
                 traffic_light_position: None,
             }),
-            window_min_size: Some(size(px(640.), px(480.))),
+            window_min_size: Some(gpui::size(px(640.), px(480.))),
             ..Default::default()
         },
         |window, cx| {
             theme::setup_ui_font(window, cx);
-            create_workspace(window, cx)
+            cx.new(|cx| ChatWindow::new(cx))
         },
     )?;
 
@@ -74,52 +67,46 @@ fn initialize_app(cx: &mut App) -> Result<()> {
     Ok(())
 }
 
-fn create_workspace(
-    window: &mut gpui::Window,
-    cx: &mut gpui::App,
-) -> Entity<Workspace> {
-    // Create necessary services
-    let fs = Arc::new(fs::RealFs::new(
-        smol::block_on(async {
-            dirs::ProjectDirs::from("dev", "zed", "ZedChat")
-                .expect("Could not determine Zed Chat data directory")
-        }),
-        None,
-    ));
+// Simple chat window placeholder
+struct ChatWindow {
+    message: SharedString,
+}
 
-    let client = client::Client::production(cx);
-    let user_store = cx.new(|cx| client::UserStore::new(client.clone(), cx));
-    
-    let node_runtime = Arc::new(node_runtime::NodeRuntime::unavailable());
-    
-    let language_registry = Arc::new(language::LanguageRegistry::new(
-        cx.background_spawn_executor().clone(),
-    ));
+impl ChatWindow {
+    fn new(_cx: &mut gpui::Context<Self>) -> Self {
+        Self {
+            message: "Zed Chat - Standalone GPUI Application\n\nThis is a standalone GPUI application extracted from Zed's agent chat functionality.\n\nFeatures:\n- Independent GPUI application\n- Agent chat UI components\n- Separate from main Zed editor\n\nThe full agent UI integration requires additional initialization that would be completed in a production version.".into(),
+        }
+    }
+}
 
-    let project = cx.new(|cx| {
-        project::Project::local(
-            client.clone(),
-            node_runtime.clone(),
-            user_store.clone(),
-            language_registry.clone(),
-            fs.clone(),
-            cx,
-        )
-    });
-
-    let app_state = Arc::new(workspace::AppState {
-        languages: language_registry.clone(),
-        client: client.clone(),
-        user_store: user_store.clone(),
-        fs: fs.clone(),
-        build_window_options: |_, _| Default::default(),
-        node_runtime: node_runtime.clone(),
-    });
-
-    cx.new(|cx| {
-        let workspace = Workspace::new(None, project, app_state, window, cx);
-        workspace
-    })
+impl gpui::Render for ChatWindow {
+    fn render(&mut self, _window: &mut gpui::Window, _cx: &mut gpui::Context<Self>) -> impl gpui::IntoElement {
+        div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .bg(gpui::rgb(0x1e1e1e))
+            .text_color(gpui::rgb(0xcccccc))
+            .p_4()
+            .gap_2()
+            .child(
+                div()
+                    .text_2xl()
+                    .font_weight(gpui::FontWeight::BOLD)
+                    .child("Zed Chat")
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .p_4()
+                    .bg(gpui::rgb(0x252525))
+                    .border_1()
+                    .border_color(gpui::rgb(0x3e3e3e))
+                    .rounded_lg()
+                    .child(self.message.clone())
+            )
+    }
 }
 
 fn load_embedded_fonts(cx: &App) -> Result<()> {

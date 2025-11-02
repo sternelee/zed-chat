@@ -14,52 +14,14 @@ name = "zed-chat"
 path = "src/main.rs"
 
 [dependencies]
-agent_ui.workspace = true
-agent_settings.workspace = true
-agent.workspace = true
-agent_servers.workspace = true
 anyhow.workspace = true
 assets.workspace = true
-assistant_slash_command.workspace = true
-assistant_slash_commands.workspace = true
-client.workspace = true
-collections.workspace = true
-command_palette.workspace = true
-db.workspace = true
-dirs.workspace = true
-editor.workspace = true
-extension.workspace = true
-extension_host.workspace = true
-feature_flags.workspace = true
-fs.workspace = true
-futures.workspace = true
-git.workspace = true
-git_hosting_providers.workspace = true
 gpui = { workspace = true, features = ["wayland", "x11", "font-kit"] }
-http_client.workspace = true
-language.workspace = true
-language_model.workspace = true
-language_models.workspace = true
-languages = { workspace = true, features = ["load-grammars"] }
 log.workspace = true
-node_runtime.workspace = true
-parking_lot.workspace = true
-paths.workspace = true
-project.workspace = true
-prompt_store.workspace = true
-release_channel.workspace = true
 reqwest_client.workspace = true
-rope.workspace = true
-session.workspace = true
 settings.workspace = true
 simplelog.workspace = true
-smol.workspace = true
-telemetry.workspace = true
 theme.workspace = true
-ui.workspace = true
-util.workspace = true
-workspace.workspace = true
-zed_actions.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
