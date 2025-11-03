@@ -1,5 +1,7 @@
-use crate::handle_open_request;
-use crate::restorable_workspace_locations;
+// Simplified open_listener for zed-chat
+// Removed complex CLI and extension handling
+
+use crate::{handle_open_request, restorable_workspace_locations};
 use anyhow::{Context as _, Result, anyhow};
 use cli::{CliRequest, CliResponse, ipc::IpcSender};
 use cli::{IpcHandshake, ipc};
@@ -12,7 +14,6 @@ use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::channel::{mpsc, oneshot};
 use futures::future::join_all;
 use futures::{FutureExt, SinkExt, StreamExt};
-use git_ui::file_diff_view::FileDiffView;
 use gpui::{App, AsyncApp, Global, WindowHandle};
 use language::Point;
 use onboarding::FIRST_OPEN;
@@ -29,6 +30,7 @@ use util::paths::PathWithPosition;
 use workspace::PathList;
 use workspace::item::ItemHandle;
 use workspace::{AppState, OpenOptions, SerializedWorkspaceLocation, Workspace};
+
 
 #[derive(Default, Debug)]
 pub struct OpenRequest {
@@ -294,16 +296,17 @@ pub async fn open_paths_with_positions(
         .update(|cx| workspace::open_paths(&paths, app_state, open_options, cx))?
         .await?;
 
-    for diff_pair in diff_paths {
-        let old_path = Path::new(&diff_pair[0]).canonicalize()?;
-        let new_path = Path::new(&diff_pair[1]).canonicalize()?;
-        if let Ok(diff_view) = workspace.update(cx, |workspace, window, cx| {
-            FileDiffView::open(old_path, new_path, workspace, window, cx)
-        }) && let Some(diff_view) = diff_view.await.log_err()
-        {
-            items.push(Some(Ok(Box::new(diff_view))))
-        }
-    }
+    // Removed: FileDiffView support (git_ui dependency removed)
+    // for diff_pair in diff_paths {
+    //     let old_path = Path::new(&diff_pair[0]).canonicalize()?;
+    //     let new_path = Path::new(&diff_pair[1]).canonicalize()?;
+    //     if let Ok(diff_view) = workspace.update(cx, |workspace, window, cx| {
+    //         FileDiffView::open(old_path, new_path, workspace, window, cx)
+    //     }) && let Some(diff_view) = diff_view.await.log_err()
+    //     {
+    //         items.push(Some(Ok(Box::new(diff_view))))
+    //     }
+    // }
 
     for (item, path) in items.iter_mut().zip(&paths) {
         if let Some(Err(error)) = item {

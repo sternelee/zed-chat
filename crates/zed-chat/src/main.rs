@@ -4,7 +4,9 @@
 
 mod reliability;
 mod zed;
-mod zed_base;
+pub mod zed_base;
+
+pub use zed_base::{handle_open_request, restorable_workspace_locations};
 
 pub fn main() {
     zed_base::main();

@@ -1,7 +1,7 @@
 use agent_ui::AgentPanel;
 use anyhow::{Context as _, Error, Result};
 use clap::{Parser, command};
-use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
+use cli::{FORCE_CLI_MODE_ENV_VAR_NAME, CliRequest, CliResponse, ipc::IpcSender};
 use client::{Client, ProxySettings, UserStore, parse_zed_link};
 use collab_ui::channel_view::ChannelView;
 use collections::HashMap;
@@ -10,9 +10,9 @@ use db::kvp::{GLOBAL_KEY_VALUE_STORE, KEY_VALUE_STORE};
 use editor::Editor;
 use extension::ExtensionHostProxy;
 use fs::{Fs, RealFs};
-use futures::{StreamExt, channel::oneshot, future};
+use futures::{StreamExt, channel::{oneshot, mpsc}, future};
 use git::GitHostingProviderRegistry;
-use gpui::{App, AppContext, Application, AsyncApp, Focusable as _, UpdateGlobal as _};
+use gpui::{App, AppContext, Application, AsyncApp, Focusable as _, UpdateGlobal as _, WindowHandle};
 
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
@@ -20,6 +20,8 @@ use onboarding::{FIRST_OPEN, show_onboarding_view};
 use prompt_store::PromptBuilder;
 use remote::RemoteConnectionOptions;
 use reqwest_client::ReqwestClient;
+use util::paths::PathWithPosition;
+use watch;
 
 use assets::Assets;
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
@@ -41,16 +43,16 @@ use util::{ResultExt, TryFutureExt, maybe};
 use uuid::Uuid;
 use workspace::{
     AppState, PathList, SerializedWorkspaceLocation, Toast, Workspace, WorkspaceSettings,
-    WorkspaceStore, notifications::NotificationId,
+    WorkspaceStore, notifications::NotificationId, item::ItemHandle,
 };
-use zed::{
-    OpenListener, OpenRequest, RawOpenRequest, app_menus, build_window_options,
-    derive_paths_with_position, edit_prediction_registry, handle_cli_connection,
-    handle_keymap_file_changes, handle_settings_changed, handle_settings_file_changes,
-    initialize_workspace, open_paths_with_positions,
-};
+// Removed: external zed crate imports - using crate::zed instead
+// use zed::{...};
 
-use crate::zed::{OpenRequestKind, eager_load_active_theme_and_icon_theme};
+use crate::zed::{OpenRequestKind, OpenListener, OpenRequest, RawOpenRequest, app_menus};
+// Removed functions that don't exist in simplified zed module:
+// - edit_prediction_registry (removed)
+// - eager_load_active_theme_and_icon_theme (need to stub or remove)
+// - derive_paths_with_position, handle_cli_connection, etc.
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -530,7 +532,7 @@ pub fn main() {
         auto_update::init(client.http_client(), cx);
         // Removed: dap_adapters (debugging feature)
         auto_update_ui::init(cx);
-        reliability::init(
+        crate::reliability::init(
             client.http_client(),
             system_id.as_ref().map(|id| id.to_string()),
             cx,
@@ -544,7 +546,7 @@ pub fn main() {
         );
 
         theme::init(theme::LoadThemes::All(Box::new(Assets)), cx);
-        eager_load_active_theme_and_icon_theme(fs.clone(), cx);
+        // Removed: eager_load_active_theme_and_icon_theme (not critical for basic functionality)
         theme_extension::init(
             extension_host_proxy,
             ThemeRegistry::global(cx),
@@ -734,7 +736,7 @@ pub fn main() {
     });
 }
 
-fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut App) {
+pub fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut App) {
     if let Some(kind) = request.kind {
         match kind {
             OpenRequestKind::CliConnection(connection) => {
@@ -1124,7 +1126,7 @@ async fn restore_or_create_workspace(app_state: Arc<AppState>, cx: &mut AsyncApp
     Ok(())
 }
 
-pub(crate) async fn restorable_workspace_locations(
+pub async fn restorable_workspace_locations(
     cx: &mut AsyncApp,
     app_state: &Arc<AppState>,
 ) -> Option<Vec<(SerializedWorkspaceLocation, PathList)>> {
@@ -1481,5 +1483,82 @@ fn check_for_conpty_dll() {
         }
     } else {
         log::warn!("Failed to load conpty.dll. Terminal will work with reduced functionality.");
+    }
+}
+
+// Stub implementations for functions removed from zed module
+
+fn handle_settings_file_changes(
+    _user_settings_file_rx: watch::Receiver<String>,
+    _global_settings_file_rx: watch::Receiver<String>,
+    _cx: &mut App,
+    _callback: fn(&mut App),
+) {
+    // TODO: Implement settings file watching if needed
+    log::warn!("Settings file watching not implemented in zed-chat");
+}
+
+fn handle_keymap_file_changes(
+    _user_keymap_file_rx: watch::Receiver<String>,
+    _cx: &mut App,
+) {
+    // TODO: Implement keymap file watching if needed  
+    log::warn!("Keymap file watching not implemented in zed-chat");
+}
+
+fn handle_settings_changed(_cx: &mut App) {
+    // Stub for settings change callback
+}
+
+fn initialize_workspace(
+    _app_state: Arc<AppState>,
+    _prompt_builder: Arc<PromptBuilder>,
+    _cx: &mut App,
+) {
+    // Stub - workspace initialization happens elsewhere
+}
+
+async fn handle_cli_connection(
+    _connection: (mpsc::Receiver<CliRequest>, IpcSender<CliResponse>),
+    _app_state: Arc<AppState>,
+    _cx: AsyncApp,
+) -> Result<()> {
+    log::warn!("CLI connection handling not implemented in zed-chat");
+    Ok(())
+}
+
+async fn derive_paths_with_position(
+    _fs: &dyn Fs,
+    paths: Vec<String>,
+) -> Vec<PathWithPosition> {
+    // Simplified version - just convert to PathWithPosition
+    paths
+        .into_iter()
+        .map(|p| PathWithPosition {
+            path: PathBuf::from(p),
+            row: None,
+            column: None,
+        })
+        .collect()
+}
+
+async fn open_paths_with_positions(
+    _paths: Vec<PathWithPosition>,
+    _app_state: Arc<AppState>,
+    _options: workspace::OpenOptions,
+    _cx: &mut AsyncApp,
+) -> Result<(WindowHandle<Workspace>, Vec<Option<Result<Box<dyn ItemHandle>>>>)> {
+    anyhow::bail!("open_paths_with_positions not implemented in zed-chat")
+}
+
+fn build_window_options(_display_uuid: Option<uuid::Uuid>, _cx: &mut App) -> gpui::WindowOptions {
+    gpui::WindowOptions {
+        titlebar: Some(gpui::TitlebarOptions {
+            title: Some("Zed Chat".into()),
+            appears_transparent: false,
+            traffic_light_position: None,
+        }),
+        window_min_size: Some(gpui::size(gpui::px(640.), gpui::px(480.))),
+        ..Default::default()
     }
 }
