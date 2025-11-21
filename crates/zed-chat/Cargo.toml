@@ -1,0 +1,165 @@
+[package]
+name = "zed-chat"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+description = "Standalone agent chat application built with GPUI"
+authors = ["Zed Team <hi@zed.dev>"]
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "zed-chat"
+path = "src/main.rs"
+
+[dependencies]
+# Agent and AI components - KEEP
+acp_tools.workspace = true
+agent_settings.workspace = true
+agent_ui.workspace = true
+ai_onboarding.workspace = true
+assistant_slash_command.workspace = true
+assistant_slash_commands.workspace = true
+
+# Core infrastructure - KEEP
+anyhow.workspace = true
+assets.workspace = true
+bincode.workspace = true
+clap.workspace = true
+cli.workspace = true
+client.workspace = true
+collections.workspace = true
+crashes.workspace = true
+db.workspace = true
+# Note: keeping minimal editor support for text display
+editor.workspace = true
+migrator.workspace = true
+markdown.workspace = true
+onboarding.workspace = true
+remote.workspace = true
+sysinfo.workspace = true
+system_specs.workspace = true
+
+# Filesystem and paths - KEEP
+fs.workspace = true
+paths.workspace = true
+
+# GPUI and UI - KEEP
+gpui = { workspace = true, features = ["wayland", "x11", "font-kit"] }
+gpui_tokio.workspace = true
+theme.workspace = true
+theme_extension.workspace = true
+theme_selector.workspace = true
+ui.workspace = true
+ui_input.workspace = true
+menu.workspace = true
+picker.workspace = true
+
+# Settings and configuration - KEEP
+settings.workspace = true
+settings_json.workspace = true
+settings_ui.workspace = true
+keymap_editor.workspace = true
+
+# Language and extensions - KEEP (needed for agent context)
+extension.workspace = true
+extension_host.workspace = true
+language.workspace = true
+language_extension.workspace = true
+language_model.workspace = true
+language_models.workspace = true
+languages = { workspace = true, features = ["load-grammars"] }
+node_runtime.workspace = true
+
+# Project and workspace - KEEP
+project.workspace = true
+workspace.workspace = true
+recent_projects.workspace = true
+
+# Networking - KEEP
+http_client.workspace = true
+proto.workspace = true
+reqwest.workspace = true
+reqwest_client.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+
+# Utilities - KEEP
+feature_flags.workspace = true
+futures.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+release_channel.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+session.workspace = true
+smol.workspace = true
+telemetry.workspace = true
+telemetry_events.workspace = true
+time.workspace = true
+util.workspace = true
+uuid.workspace = true
+watch.workspace = true
+
+# Git - KEEP (minimal, for version info)
+git.workspace = true
+git_hosting_providers.workspace = true
+
+# Prompts and context - KEEP
+prompt_store.workspace = true
+web_search.workspace = true
+web_search_providers.workspace = true
+
+# UI Components - KEEP
+command_palette.workspace = true
+notifications.workspace = true
+title_bar.workspace = true
+zed_actions.workspace = true
+zed_env_vars.workspace = true
+zlog.workspace = true
+zlog_settings.workspace = true
+
+# Minimal additional components - KEEP
+askpass.workspace = true
+audio.workspace = true
+auto_update.workspace = true
+auto_update_ui.workspace = true
+call.workspace = true
+channel.workspace = true
+collab_ui.workspace = true
+extensions_ui.workspace = true
+feedback.workspace = true
+json_schema_store.workspace = true
+language_selector.workspace = true
+language_tools.workspace = true
+nc.workspace = true
+rope.workspace = true
+settings_profile_selector.workspace = true
+ui_prompt.workspace = true
+
+# System
+backtrace = "0.3"
+env_logger.workspace = true
+shellexpand.workspace = true
+
+[features]
+default = []
+mimalloc = ["dep:mimalloc"]
+
+[dependencies.mimalloc]
+version = "0.1"
+optional = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows.workspace = true
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+ashpd.workspace = true
+
+[target.'cfg(target_os = "linux")']
+nix = { workspace = true, features = ["pthread", "signal"] }
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
