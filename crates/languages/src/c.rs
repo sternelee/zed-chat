@@ -3,13 +3,13 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use gpui::{App, AsyncApp};
 use http_client::github::{AssetKind, GitHubLspBinaryVersion, latest_github_release};
-use http_client::github_download::fetch_github_binary_with_digest_check;
+use http_client::github_download::{GithubBinaryMetadata, download_server_binary};
 pub use language::*;
 use lsp::{InitializeParams, LanguageServerBinary, LanguageServerName};
 use project::lsp_store::clangd_ext;
 use serde_json::json;
 use smol::fs;
-use std::{env::consts, path::PathBuf, sync::Arc};
+use std::{env::consts, future::Future, path::PathBuf, sync::Arc};
 use util::{ResultExt, fs::remove_matching, maybe, merge_json_value_into};
 
 pub struct CLspAdapter;
@@ -23,10 +23,12 @@ impl LspInstaller for CLspAdapter {
 
     async fn fetch_latest_server_version(
         &self,
-        delegate: &dyn LspAdapterDelegate,
+        delegate: &Arc<dyn LspAdapterDelegate>,
         pre_release: bool,
         _: &mut AsyncApp,
     ) -> Result<GitHubLspBinaryVersion> {
+        ensure_arch_compatibility()?;
+
         let release =
             latest_github_release("clangd/clangd", true, pre_release, delegate.http_client())
                 .await?;
@@ -52,7 +54,7 @@ impl LspInstaller for CLspAdapter {
 
     async fn check_if_user_installed(
         &self,
-        delegate: &dyn LspAdapterDelegate,
+        delegate: &Arc<dyn LspAdapterDelegate>,
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
@@ -64,55 +66,88 @@ impl LspInstaller for CLspAdapter {
         })
     }
 
-    async fn fetch_server_binary(
+    fn fetch_server_binary(
         &self,
         version: GitHubLspBinaryVersion,
         container_dir: PathBuf,
-        delegate: &dyn LspAdapterDelegate,
-    ) -> Result<LanguageServerBinary> {
-        let GitHubLspBinaryVersion {
-            name,
-            url,
-            digest: expected_digest,
-        } = version;
-        let version_dir = container_dir.join(format!("clangd_{name}"));
-        let binary_path = version_dir.join("bin/clangd");
+        delegate: &Arc<dyn LspAdapterDelegate>,
+    ) -> impl Send + Future<Output = Result<LanguageServerBinary>> + use<> {
+        let delegate = delegate.clone();
 
-        let binary = LanguageServerBinary {
-            path: binary_path.clone(),
-            env: None,
-            arguments: Default::default(),
-        };
+        async move {
+            ensure_arch_compatibility()?;
 
-        let metadata_path = version_dir.join("metadata");
+            let GitHubLspBinaryVersion {
+                name,
+                url,
+                digest: expected_digest,
+            } = version;
+            let version_dir = container_dir.join(format!("clangd_{name}"));
+            let binary_path = version_dir
+                .join("bin")
+                .join(format!("clangd{}", consts::EXE_SUFFIX));
 
-        let binary_path_for_check = binary_path.clone();
-        fetch_github_binary_with_digest_check(
-            &binary_path,
-            &metadata_path,
-            expected_digest,
-            &url,
-            AssetKind::Zip,
-            &container_dir,
-            &*delegate.http_client(),
-            || async move {
-                delegate
-                    .try_exec(LanguageServerBinary {
-                        path: binary_path_for_check,
-                        arguments: vec!["--version".into()],
-                        env: None,
-                    })
-                    .await
-                    .inspect_err(|err| {
-                        log::warn!("Unable to run clangd asset, redownloading: {err:#}")
-                    })
-            },
-        )
-        .await?;
+            let binary = LanguageServerBinary {
+                path: binary_path.clone(),
+                env: None,
+                arguments: Default::default(),
+            };
 
-        remove_matching(&container_dir, |entry| entry != version_dir).await;
+            let metadata_path = version_dir.join("metadata");
+            let metadata = GithubBinaryMetadata::read_from_file(&metadata_path)
+                .await
+                .ok();
+            if let Some(metadata) = metadata {
+                let validity_check = async || {
+                    delegate
+                        .try_exec(LanguageServerBinary {
+                            path: binary_path.clone(),
+                            arguments: vec!["--version".into()],
+                            env: None,
+                        })
+                        .await
+                        .inspect_err(|err| {
+                            log::warn!(
+                                "Unable to run {binary_path:?} asset, redownloading: {err:#}",
+                            )
+                        })
+                };
+                if let (Some(actual_digest), Some(expected_digest)) =
+                    (&metadata.digest, &expected_digest)
+                {
+                    if actual_digest == expected_digest {
+                        if validity_check().await.is_ok() {
+                            return Ok(binary);
+                        }
+                    } else {
+                        log::info!(
+                            "SHA-256 mismatch for {binary_path:?} asset, downloading new asset. Expected: {expected_digest}, Got: {actual_digest}"
+                        );
+                    }
+                } else if validity_check().await.is_ok() {
+                    return Ok(binary);
+                }
+            }
+            download_server_binary(
+                &*delegate.http_client(),
+                &url,
+                expected_digest.as_deref(),
+                &container_dir,
+                AssetKind::Zip,
+            )
+            .await?;
+            remove_matching(&container_dir, |entry| entry != version_dir).await;
+            GithubBinaryMetadata::write_to_file(
+                &GithubBinaryMetadata {
+                    metadata_version: 1,
+                    digest: expected_digest,
+                },
+                &metadata_path,
+            )
+            .await?;
 
-        Ok(binary)
+            Ok(binary)
+        }
     }
 
     async fn cached_server_binary(
@@ -122,6 +157,16 @@ impl LspInstaller for CLspAdapter {
     ) -> Option<LanguageServerBinary> {
         get_cached_server_binary(container_dir).await
     }
+}
+
+fn ensure_arch_compatibility() -> Result<()> {
+    let arch = consts::ARCH;
+    if consts::OS == "linux" && !["x86_64", "x86"].contains(&arch) {
+        anyhow::bail!(
+            "Clangd does not provide prebuilt binaries for {arch} to fetch from GitHub. Consider installing the binary manually."
+        )
+    }
+    Ok(())
 }
 
 #[async_trait(?Send)]
@@ -250,11 +295,11 @@ impl super::LspAdapter for CLspAdapter {
 
     async fn label_for_symbol(
         &self,
-        name: &str,
-        kind: lsp::SymbolKind,
+        symbol: &language::Symbol,
         language: &Arc<Language>,
     ) -> Option<CodeLabel> {
-        let (text, filter_range, display_range) = match kind {
+        let name = &symbol.name;
+        let (text, filter_range, display_range) = match symbol.kind {
             lsp::SymbolKind::METHOD | lsp::SymbolKind::FUNCTION => {
                 let text = format!("void {} () {{}}", name);
                 let filter_range = 0..name.len();
@@ -331,7 +376,7 @@ impl super::LspAdapter for CLspAdapter {
         Ok(original)
     }
 
-    fn retain_old_diagnostic(&self, previous_diagnostic: &Diagnostic, _: &App) -> bool {
+    fn retain_old_diagnostic(&self, previous_diagnostic: &Diagnostic) -> bool {
         clangd_ext::is_inactive_region(previous_diagnostic)
     }
 
@@ -351,7 +396,9 @@ async fn get_cached_server_binary(container_dir: PathBuf) -> Option<LanguageServ
             }
         }
         let clangd_dir = last_clangd_dir.context("no cached binary")?;
-        let clangd_bin = clangd_dir.join("bin/clangd");
+        let clangd_bin = clangd_dir
+            .join("bin")
+            .join(format!("clangd{}", consts::EXE_SUFFIX));
         anyhow::ensure!(
             clangd_bin.exists(),
             "missing clangd binary in directory {clangd_dir:?}"

@@ -12,10 +12,8 @@
   = @ConradIrwin
   = @danilo-leal
   = @dinocosta
-  = @HactarCE
   = @kubkon
   = @maxdeviant
-  = @p1n3appl3
   = @probably-neb
   = @smitbarmase
   = @SomeoneToIgnore
@@ -28,10 +26,9 @@ ai
   = @rtfeldman
 
 audio
-  = @dvdsk
+  = @yara-blue
 
 crashes
-  = @p1n3appl3
   = @Veykril
 
 debugger
@@ -53,6 +50,10 @@ extension
 git
   = @cole-miller
   = @danilo-leal
+  = @yara-blue
+  = @kubkon
+  = @Anthony-Eid
+  = @cameron1024
 
 gpui
   = @Anthony-Eid
@@ -72,8 +73,7 @@ languages
 
 linux
   = @cole-miller
-  = @dvdsk
-  = @p1n3appl3
+  = @yara-blue
   = @probably-neb
   = @smitbarmase
 
@@ -88,8 +88,7 @@ multi_buffer
   = @SomeoneToIgnore
 
 pickers
-  = @dvdsk
-  = @p1n3appl3
+  = @yara-blue
   = @SomeoneToIgnore
 
 project_panel
@@ -120,10 +119,8 @@ text
 vim
   = @ConradIrwin
   = @dinocosta
-  = @p1n3appl3
   = @probably-neb
 
 windows
-  = @localcc
   = @reflectronic
   = @Veykril

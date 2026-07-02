@@ -2,15 +2,17 @@ use anyhow::Context as _;
 use collections::{HashMap, HashSet};
 use fs::Fs;
 use gpui::{AsyncApp, Entity};
-use language::{Buffer, Diff, language_settings::language_settings};
+use language::language_settings::{LanguageSettings, PrettierSettings};
+use language::{Buffer, Diff, Language, OffsetUtf16};
 use lsp::{LanguageServer, LanguageServerId};
 use node_runtime::NodeRuntime;
 use paths::default_prettier_dir;
 use serde::{Deserialize, Serialize};
 use std::{
-    ops::ControlFlow,
+    ops::{ControlFlow, Range},
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 use util::{
     paths::{PathMatcher, PathStyle},
@@ -46,6 +48,8 @@ const TAILWIND_PRETTIER_PLUGIN_PACKAGE_NAME: &str = "prettier-plugin-tailwindcss
 
 #[cfg(any(test, feature = "test-support"))]
 pub const FORMAT_SUFFIX: &str = "\nformatted by test prettier";
+#[cfg(any(test, feature = "test-support"))]
+pub const RANGE_FORMAT_SUFFIX: &str = "\nrange formatted by test prettier";
 
 impl Prettier {
     pub const CONFIG_FILE_NAMES: &'static [&'static str] = &[
@@ -272,6 +276,7 @@ impl Prettier {
         _: LanguageServerId,
         prettier_dir: PathBuf,
         _: NodeRuntime,
+        _: Duration,
         _: AsyncApp,
     ) -> anyhow::Result<Self> {
         Ok(Self::Test(TestPrettier {
@@ -285,6 +290,7 @@ impl Prettier {
         server_id: LanguageServerId,
         prettier_dir: PathBuf,
         node: NodeRuntime,
+        request_timeout: Duration,
         mut cx: AsyncApp,
     ) -> anyhow::Result<Self> {
         use lsp::{LanguageServerBinary, LanguageServerName};
@@ -309,6 +315,7 @@ impl Prettier {
             arguments: vec![prettier_server.into(), prettier_dir.as_path().into()],
             env: None,
         };
+
         let server = LanguageServer::new(
             Arc::new(parking_lot::Mutex::new(None)),
             server_id,
@@ -323,12 +330,12 @@ impl Prettier {
 
         let server = cx
             .update(|cx| {
-                let params = server.default_initialize_params(false, cx);
+                let params = server.default_initialize_params(false, false, cx);
                 let configuration = lsp::DidChangeConfigurationParams {
                     settings: Default::default(),
                 };
-                executor.spawn(server.initialize(params, configuration.into(), cx))
-            })?
+                executor.spawn(server.initialize(params, configuration.into(), request_timeout, cx))
+            })
             .await
             .context("prettier server initialization")?;
         Ok(Self::Real(RealPrettier {
@@ -343,14 +350,16 @@ impl Prettier {
         buffer: &Entity<Buffer>,
         buffer_path: Option<PathBuf>,
         ignore_dir: Option<PathBuf>,
+        range_utf16: Option<Range<OffsetUtf16>>,
+        request_timeout: Duration,
         cx: &mut AsyncApp,
     ) -> anyhow::Result<Diff> {
         match self {
             Self::Real(local) => {
                 let params = buffer
                     .update(cx, |buffer, cx| {
-                        let buffer_language = buffer.language();
-                        let language_settings = language_settings(buffer_language.map(|l| l.name()), buffer.file(), cx);
+                        let buffer_language = buffer.language().map(|language| language.as_ref());
+                        let language_settings = LanguageSettings::for_buffer(&buffer, cx);
                         let prettier_settings = &language_settings.prettier;
                         anyhow::ensure!(
                             prettier_settings.allowed,
@@ -449,15 +458,7 @@ impl Prettier {
                             })
                             .collect();
 
-                        let mut prettier_parser = prettier_settings.parser.as_deref();
-                        if buffer_path.is_none() {
-                            prettier_parser = prettier_parser.or_else(|| buffer_language.and_then(|language| language.prettier_parser_name()));
-                            if prettier_parser.is_none() {
-                                log::error!("Formatting unsaved file with prettier failed. No prettier parser configured for language {buffer_language:?}");
-                                anyhow::bail!("Cannot determine prettier parser for unsaved file");
-                            }
-
-                        }
+                        let parser = prettier_parser_name(buffer_path.as_deref(), buffer_language, prettier_settings).context("getting prettier parser")?;
 
                         let ignore_path = ignore_dir.and_then(|dir| {
                             let ignore_file = dir.join(".prettierignore");
@@ -475,22 +476,24 @@ impl Prettier {
                         anyhow::Ok(FormatParams {
                             text: buffer.text(),
                             options: FormatOptions {
-                                parser: prettier_parser.map(ToOwned::to_owned),
-                                plugins,
                                 path: buffer_path,
+                                parser,
+                                plugins,
                                 prettier_options,
                                 ignore_path,
+                                range_start: range_utf16.as_ref().map(|r| r.start.0),
+                                range_end: range_utf16.as_ref().map(|r| r.end.0),
                             },
                         })
-                    })?
-                    .context("building prettier request")?;
+                })
+                .context("building prettier request")?;
 
                 let response = local
                     .server
-                    .request::<Format>(params)
+                    .request::<Format>(params, request_timeout)
                     .await
                     .into_response()?;
-                let diff_task = buffer.update(cx, |buffer, cx| buffer.diff(response.text, cx))?;
+                let diff_task = buffer.update(cx, |buffer, cx| buffer.diff(response.text, cx));
                 Ok(diff_task.await)
             }
             #[cfg(any(test, feature = "test-support"))]
@@ -503,21 +506,54 @@ impl Prettier {
                     {
                         Some("rust") => anyhow::bail!("prettier does not support Rust"),
                         Some(_other) => {
-                            let formatted_text = buffer.text() + FORMAT_SUFFIX;
+                            let buffer_language =
+                                buffer.language().map(|language| language.as_ref());
+                            let language_settings = LanguageSettings::for_buffer(buffer, cx);
+                            let prettier_settings = &language_settings.prettier;
+                            let parser = prettier_parser_name(
+                                buffer_path.as_deref(),
+                                buffer_language,
+                                prettier_settings,
+                            )?;
+
+                            let formatted_text = if let Some(range) = &range_utf16 {
+                                let text = buffer.text();
+                                let start_byte = buffer.offset_utf16_to_offset(range.start);
+                                let insert_at = text[start_byte..]
+                                    .find('\n')
+                                    .map(|pos| start_byte + pos)
+                                    .unwrap_or(text.len());
+                                let mut suffix = RANGE_FORMAT_SUFFIX.to_string();
+                                if let Some(parser) = &parser {
+                                    suffix = format!("{suffix}\n{parser}");
+                                }
+                                let mut result = String::new();
+                                result.push_str(&text[..insert_at]);
+                                result.push_str(&suffix);
+                                result.push_str(&text[insert_at..]);
+                                result
+                            } else {
+                                let mut text = buffer.text() + FORMAT_SUFFIX;
+                                if let Some(parser) = &parser {
+                                    text = format!("{text}\n{parser}");
+                                }
+                                text
+                            };
+
                             Ok(buffer.diff(formatted_text, cx))
                         }
                         None => panic!("Should not format buffer without a language with prettier"),
                     }
-                })??
+                })?
                 .await),
         }
     }
 
-    pub async fn clear_cache(&self) -> anyhow::Result<()> {
+    pub async fn clear_cache(&self, request_timeout: Duration) -> anyhow::Result<()> {
         match self {
             Self::Real(local) => local
                 .server
-                .request::<ClearCache>(())
+                .request::<ClearCache>((), request_timeout)
                 .await
                 .into_response()
                 .context("prettier clear cache"),
@@ -549,6 +585,40 @@ impl Prettier {
             Self::Test(test_prettier) => &test_prettier.prettier_dir,
         }
     }
+}
+
+fn prettier_parser_name(
+    buffer_path: Option<&Path>,
+    buffer_language: Option<&Language>,
+    prettier_settings: &PrettierSettings,
+) -> anyhow::Result<Option<String>> {
+    let parser = if buffer_path.is_none() {
+        let parser = prettier_settings
+            .parser
+            .as_deref()
+            .or_else(|| buffer_language.and_then(|language| language.prettier_parser_name()));
+        if parser.is_none() {
+            log::error!(
+                "Formatting unsaved file with prettier failed. No prettier parser configured for language {buffer_language:?}"
+            );
+            anyhow::bail!("Cannot determine prettier parser for unsaved file");
+        }
+        parser
+    } else if let (Some(buffer_language), Some(buffer_path)) = (buffer_language, buffer_path)
+        && buffer_path.extension().is_some_and(|extension| {
+            !buffer_language
+                .config()
+                .matcher
+                .path_suffixes
+                .contains(&extension.to_string_lossy().into_owned())
+        })
+    {
+        buffer_language.prettier_parser_name()
+    } else {
+        prettier_settings.parser.as_deref()
+    };
+
+    Ok(parser.map(ToOwned::to_owned))
 }
 
 async fn has_prettier_in_node_modules(fs: &dyn Fs, path: &Path) -> anyhow::Result<bool> {
@@ -604,6 +674,10 @@ struct FormatOptions {
     path: Option<PathBuf>,
     prettier_options: Option<HashMap<String, serde_json::Value>>,
     ignore_path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    range_start: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    range_end: Option<usize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

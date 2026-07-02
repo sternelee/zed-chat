@@ -1,6 +1,6 @@
 use anyhow::Context as _;
+
 use git::repository::{Remote, RemoteCommandOutput};
-use linkify::{LinkFinder, LinkKind};
 use ui::SharedString;
 use util::ResultExt as _;
 
@@ -24,7 +24,6 @@ impl RemoteAction {
 pub enum SuccessStyle {
     Toast,
     ToastWithLog { output: RemoteCommandOutput },
-    PushPrLink { text: String, link: String },
 }
 
 pub struct SuccessMessage {
@@ -118,42 +117,16 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
             }
         }
         RemoteAction::Push(branch_name, remote_ref) => {
-            let message = if output.stderr.ends_with("Everything up-to-date\n") {
-                "Push: Everything is up-to-date".to_string()
+            if output.stderr.ends_with("Everything up-to-date\n") {
+                SuccessMessage {
+                    message: "Push: Everything is up-to-date".to_string(),
+                    style: SuccessStyle::Toast,
+                }
             } else {
-                format!("Pushed {} to {}", branch_name, remote_ref.name)
-            };
-
-            let style = if output.stderr.ends_with("Everything up-to-date\n") {
-                Some(SuccessStyle::Toast)
-            } else if output.stderr.contains("\nremote: ") {
-                let pr_hints = [
-                    ("Create a pull request", "Create Pull Request"), // GitHub
-                    ("Create pull request", "Create Pull Request"),   // Bitbucket
-                    ("create a merge request", "Create Merge Request"), // GitLab
-                    ("View merge request", "View Merge Request"),     // GitLab
-                ];
-                pr_hints
-                    .iter()
-                    .find(|(indicator, _)| output.stderr.contains(indicator))
-                    .and_then(|(_, mapped)| {
-                        let finder = LinkFinder::new();
-                        finder
-                            .links(&output.stderr)
-                            .filter(|link| *link.kind() == LinkKind::Url)
-                            .map(|link| link.start()..link.end())
-                            .next()
-                            .map(|link| SuccessStyle::PushPrLink {
-                                text: mapped.to_string(),
-                                link: output.stderr[link].to_string(),
-                            })
-                    })
-            } else {
-                None
-            };
-            SuccessMessage {
-                message,
-                style: style.unwrap_or(SuccessStyle::ToastWithLog { output }),
+                SuccessMessage {
+                    message: format!("Pushed {} to {}", branch_name, remote_ref.name),
+                    style: SuccessStyle::ToastWithLog { output },
+                }
             }
         }
     }
@@ -167,9 +140,9 @@ mod tests {
     #[test]
     fn test_push_new_branch_pull_request() {
         let action = RemoteAction::Push(
-            SharedString::new("test_branch"),
+            SharedString::new_static("test_branch"),
             Remote {
-                name: SharedString::new("test_remote"),
+                name: SharedString::new_static("test_remote"),
             },
         );
 
@@ -189,20 +162,16 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        if let SuccessStyle::PushPrLink { text: hint, link } = &msg.style {
-            assert_eq!(hint, "Create Pull Request");
-            assert_eq!(link, "https://example.com/test/test/pull/new/test");
-        } else {
-            panic!("Expected PushPrLink variant");
-        }
+        assert!(matches!(msg.style, SuccessStyle::ToastWithLog { .. }));
+        assert_eq!(msg.message, "Pushed test_branch to test_remote");
     }
 
     #[test]
     fn test_push_new_branch_merge_request() {
         let action = RemoteAction::Push(
-            SharedString::new("test_branch"),
+            SharedString::new_static("test_branch"),
             Remote {
-                name: SharedString::new("test_remote"),
+                name: SharedString::new_static("test_remote"),
             },
         );
 
@@ -222,29 +191,26 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        if let SuccessStyle::PushPrLink { text, link } = &msg.style {
-            assert_eq!(text, "Create Merge Request");
-            assert_eq!(
-                link,
-                "https://example.com/test/test/-/merge_requests/new?merge_request%5Bsource_branch%5D=test"
-            );
-        } else {
-            panic!("Expected PushPrLink variant");
-        }
+        assert!(matches!(msg.style, SuccessStyle::ToastWithLog { .. }));
+        assert_eq!(msg.message, "Pushed test_branch to test_remote");
     }
 
     #[test]
     fn test_push_branch_existing_merge_request() {
         let action = RemoteAction::Push(
-            SharedString::new("test_branch"),
+            SharedString::new_static("test_branch"),
             Remote {
-                name: SharedString::new("test_remote"),
+                name: SharedString::new_static("test_remote"),
             },
         );
 
         let output = RemoteCommandOutput {
             stdout: String::new(),
+            // Simulate an extraneous link that should not be found in top 3 lines
             stderr: indoc! {"
+                ** WARNING: connection is not using a post-quantum key exchange algorithm.
+                ** This session may be vulnerable to \"store now, decrypt later\" attacks.
+                ** The server may need to be upgraded. See https://openssh.com/pq.html
                 Total 0 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
                 remote:
                 remote: View merge request for test:
@@ -258,20 +224,16 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        if let SuccessStyle::PushPrLink { text, link } = &msg.style {
-            assert_eq!(text, "View Merge Request");
-            assert_eq!(link, "https://example.com/test/test/-/merge_requests/99999");
-        } else {
-            panic!("Expected PushPrLink variant");
-        }
+        assert!(matches!(msg.style, SuccessStyle::ToastWithLog { .. }));
+        assert_eq!(msg.message, "Pushed test_branch to test_remote");
     }
 
     #[test]
     fn test_push_new_branch_no_link() {
         let action = RemoteAction::Push(
-            SharedString::new("test_branch"),
+            SharedString::new_static("test_branch"),
             Remote {
-                name: SharedString::new("test_remote"),
+                name: SharedString::new_static("test_remote"),
             },
         );
 

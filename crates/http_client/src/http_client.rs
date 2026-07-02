@@ -1,17 +1,16 @@
 mod async_body;
+#[cfg(not(target_family = "wasm"))]
 pub mod github;
+#[cfg(all(not(target_family = "wasm"), feature = "github-download"))]
 pub mod github_download;
 
 pub use anyhow::{Result, anyhow};
-pub use async_body::{AsyncBody, Inner};
+pub use async_body::{AsyncBody, Inner, Json};
 use derive_more::Deref;
-use http::HeaderValue;
 pub use http::{self, Method, Request, Response, StatusCode, Uri, request::Builder};
+use http::{HeaderName, HeaderValue};
 
-use futures::{
-    FutureExt as _,
-    future::{self, BoxFuture},
-};
+use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::sync::Arc;
@@ -55,6 +54,58 @@ pub trait HttpRequestExt {
 impl HttpRequestExt for http::request::Builder {
     fn follow_redirects(self, follow: RedirectPolicy) -> Self {
         self.extension(follow)
+    }
+}
+
+/// A set of pre-validated user-supplied HTTP headers.
+///
+/// Construction (and the per-name validation that goes with it) happens once
+/// at settings load time. Cloning is `Arc`-cheap, so providers can hand a copy
+/// to each outgoing request without re-parsing or re-allocating.
+#[derive(Default, Clone, Debug)]
+pub struct CustomHeaders(Arc<[(HeaderName, HeaderValue)]>);
+
+impl CustomHeaders {
+    pub fn new(headers: Vec<(HeaderName, HeaderValue)>) -> Self {
+        Self(headers.into())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&HeaderName, &HeaderValue)> {
+        self.0.iter().map(|(n, v)| (n, v))
+    }
+}
+
+impl PartialEq for CustomHeaders {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.len() == other.0.len()
+            && self
+                .0
+                .iter()
+                .zip(other.0.iter())
+                .all(|(a, b)| a.0 == b.0 && a.1 == b.1)
+    }
+}
+
+pub trait RequestBuilderExt {
+    /// Append every header in `headers` to the request being built.
+    fn extra_headers(self, headers: &CustomHeaders) -> Self;
+}
+
+impl RequestBuilderExt for http::request::Builder {
+    fn extra_headers(mut self, headers: &CustomHeaders) -> Self {
+        if headers.is_empty() {
+            return self;
+        }
+        if let Some(map) = self.headers_mut() {
+            for (name, value) in headers.iter() {
+                map.append(name.clone(), value.clone());
+            }
+        }
+        self
     }
 }
 
@@ -110,14 +161,6 @@ pub trait HttpClient: 'static + Send + Sync {
     fn as_fake(&self) -> &FakeHttpClient {
         panic!("called as_fake on {}", type_name::<Self>())
     }
-
-    fn send_multipart_form<'a>(
-        &'a self,
-        _url: &str,
-        _request: reqwest::multipart::Form,
-    ) -> BoxFuture<'a, anyhow::Result<Response<AsyncBody>>> {
-        future::ready(Err(anyhow!("not implemented"))).boxed()
-    }
 }
 
 /// An [`HttpClient`] that may have a proxy.
@@ -164,14 +207,6 @@ impl HttpClient for HttpClientWithProxy {
     #[cfg(feature = "test-support")]
     fn as_fake(&self) -> &FakeHttpClient {
         self.client.as_fake()
-    }
-
-    fn send_multipart_form<'a>(
-        &'a self,
-        url: &str,
-        form: reqwest::multipart::Form,
-    ) -> BoxFuture<'a, anyhow::Result<Response<AsyncBody>>> {
-        self.client.send_multipart_form(url, form)
     }
 }
 
@@ -306,14 +341,6 @@ impl HttpClient for HttpClientWithUrl {
     fn as_fake(&self) -> &FakeHttpClient {
         self.client.as_fake()
     }
-
-    fn send_multipart_form<'a>(
-        &'a self,
-        url: &str,
-        request: reqwest::multipart::Form,
-    ) -> BoxFuture<'a, anyhow::Result<Response<AsyncBody>>> {
-        self.client.send_multipart_form(url, request)
-    }
 }
 
 pub fn read_proxy_from_env() -> Option<Url> {
@@ -408,6 +435,7 @@ impl FakeHttpClient {
     }
 
     pub fn with_404_response() -> Arc<HttpClientWithUrl> {
+        log::warn!("Using fake HTTP client with 404 response");
         Self::create(|_| async move {
             Ok(Response::builder()
                 .status(404)
@@ -417,6 +445,7 @@ impl FakeHttpClient {
     }
 
     pub fn with_200_response() -> Arc<HttpClientWithUrl> {
+        log::warn!("Using fake HTTP client with 200 response");
         Self::create(|_| async move {
             Ok(Response::builder()
                 .status(200)
